@@ -16,6 +16,7 @@ by two.
 
 import unittest
 
+import numpy
 import pytest
 
 from openfermion.hamiltonians import fermi_hubbard
@@ -26,7 +27,7 @@ from openfermion.linalg.sparse_tools import (
     jw_get_ground_state_at_particle_number,
 )
 from openfermion.linalg import eigenspectrum
-from openfermion.ops.operators import FermionOperator
+from openfermion.ops.operators import FermionOperator, QubitOperator
 
 from openfermion.transforms.opconversions.remove_symmetry_qubits import (
     symmetry_conserving_bravyi_kitaev,
@@ -152,3 +153,27 @@ class ReduceSymmetryQubitsTest(unittest.TestCase):
         e_trafo = eigenspectrum(trafo_op)
         # Check eigenvalues
         self.assertSequenceEqual(e_op.tolist(), e_trafo.tolist())
+
+    def test_output_is_simplified_qubit_operator(self):
+        # Regression test for issue #880: symmetry_conserving_bravyi_kitaev
+        # used to return QubitOperators with un-simplified terms (multiple
+        # Paulis acting on the same qubit), which made get_sparse_operator
+        # raise a ValueError.
+        op = FermionOperator("0^ 1^")
+        trafo_op = symmetry_conserving_bravyi_kitaev(op, active_orbitals=4, active_fermions=2)
+
+        # Every term must be in canonical form: at most one Pauli per qubit.
+        for term in trafo_op.terms:
+            qubits = [qubit for qubit, _ in term]
+            self.assertEqual(len(qubits), len(set(qubits)))
+
+        # get_sparse_operator must no longer raise ...
+        sparse_op = get_sparse_operator(trafo_op)
+
+        # ... and must match the explicitly-simplified operator.
+        simplified = QubitOperator()
+        for term, coefficient in trafo_op.terms.items():
+            simplified += QubitOperator(term, coefficient)
+        expected = get_sparse_operator(simplified)
+
+        self.assertTrue(numpy.allclose(sparse_op.toarray(), expected.toarray()))
