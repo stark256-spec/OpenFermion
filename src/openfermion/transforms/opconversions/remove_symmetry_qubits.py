@@ -95,9 +95,9 @@ def symmetry_conserving_bravyi_kitaev(fermion_hamiltonian, active_orbitals, acti
         qubit_hamiltonian, active_orbitals, parity_final_orb
     )
     qubit_hamiltonian = edit_hamiltonian_for_spin(
-        qubit_hamiltonian, active_orbitals / 2, parity_middle_orb
+        qubit_hamiltonian, active_orbitals // 2, parity_middle_orb
     )
-    qubit_hamiltonian = remove_indices(qubit_hamiltonian, (active_orbitals / 2, active_orbitals))
+    qubit_hamiltonian = remove_indices(qubit_hamiltonian, (active_orbitals // 2, active_orbitals))
 
     # remove_indices() shifts qubit indices and can map two qubits onto the
     # same index, producing terms with multiple Paulis acting on one qubit

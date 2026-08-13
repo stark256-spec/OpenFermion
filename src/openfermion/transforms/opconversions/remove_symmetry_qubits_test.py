@@ -157,23 +157,32 @@ class ReduceSymmetryQubitsTest(unittest.TestCase):
     def test_output_is_simplified_qubit_operator(self):
         # Regression test for issue #880: symmetry_conserving_bravyi_kitaev
         # used to return QubitOperators with un-simplified terms (multiple
-        # Paulis acting on the same qubit), which made get_sparse_operator
-        # raise a ValueError.
+        # Paulis acting on the same qubit, e.g. ((0, 'X'), (1, 'Y'), (1, 'X'))
+        # left behind when remove_indices maps two qubit indices onto one),
+        # which made get_sparse_operator raise a ValueError.
         op = FermionOperator("0^ 1^")
         trafo_op = symmetry_conserving_bravyi_kitaev(op, active_orbitals=4, active_fermions=2)
 
-        # Every term must be in canonical form: at most one Pauli per qubit.
+        # The result must equal the known, fully-simplified operator for this
+        # input, worked out independently (rather than re-derived from
+        # trafo_op, which would be a no-op now that the output is simplified).
+        expected_op = (
+            QubitOperator(((0, "X"), (1, "Z")), -0.25)
+            + QubitOperator(((0, "X"),), -0.25)
+            + QubitOperator(((0, "Y"), (1, "Z")), 0.25j)
+            + QubitOperator(((0, "Y"),), 0.25j)
+        )
+        self.assertEqual(trafo_op, expected_op)
+
+        # Every term is canonical: at most one Pauli per qubit.
         for term in trafo_op.terms:
             qubits = [qubit for qubit, _ in term]
             self.assertEqual(len(qubits), len(set(qubits)))
 
-        # get_sparse_operator must no longer raise ...
-        sparse_op = get_sparse_operator(trafo_op)
-
-        # ... and must match the explicitly-simplified operator.
-        simplified = QubitOperator()
-        for term, coefficient in trafo_op.terms.items():
-            simplified += QubitOperator(term, coefficient)
-        expected = get_sparse_operator(simplified)
-
-        self.assertTrue(numpy.allclose(sparse_op.toarray(), expected.toarray()))
+        # get_sparse_operator must no longer raise on the result, and must
+        # produce the sparse matrix of the independently-specified operator.
+        self.assertTrue(
+            numpy.allclose(
+                get_sparse_operator(trafo_op).toarray(), get_sparse_operator(expected_op).toarray()
+            )
+        )
